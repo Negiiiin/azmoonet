@@ -31,12 +31,12 @@ import java.util.*;
 @RestController
 public class QuizRestAPI {
 
-    private Quiz quiz;
+//    private Quiz quiz;
 
     @CrossOrigin(origins = {"http://194.62.43.26:8081", "http://localhost:8081"})
     @RequestMapping(value = "/quiz/{id}", method = RequestMethod.GET)
     public @ResponseBody
-    List<Question> produceNewQuiz(@RequestHeader Map<String, String> headers,
+    Quiz produceNewQuiz(@RequestHeader Map<String, String> headers,
                                   @PathVariable(value = "id") String id) throws SQLException {
         System.out.println("IN GET PRODUCE QUIZ FUNCTION");
 
@@ -48,10 +48,6 @@ public class QuizRestAPI {
             DecodedJWT jwt = verifier.verify(headers.get("authorization"));
             ArrayList<String> ID = new ArrayList<>();
             ID.add(jwt.getClaim("id").asString());
-//            System.out.println("--------------------------------------------******");
-//            System.out.println(jwt.getClaim("id").asString());
-//            System.out.println("--------------------------------------------!!!!!!!");
-//            System.out.println(userMapper.find(ID).getID());
             if(!(userMapper.find(ID).getID().equals(jwt.getClaim("id").asString())
                     && jwt.getClaim("phoneNumber").asString().equals(userMapper.find(ID).getPhoneNumber())
                     && jwt.getClaim("iss").asString().equals("user"))){
@@ -68,7 +64,7 @@ public class QuizRestAPI {
 
         System.out.println("AFTER JWT");
 
-        quiz = new Quiz();
+        Quiz quiz = new Quiz();
 
         quiz.setID(UUID.randomUUID().toString());
         Date date = new Date();
@@ -82,16 +78,55 @@ public class QuizRestAPI {
         quiz.setRightAnswers(quiz.getRightAnswers(questions));
         quiz.setQuestionIDs(quiz.getQuestionID(questions));
 
+
+        Connection connection = ConnectionPool.getConnection();
+        QuizMapper quizMapper = new QuizMapper(false);
+        quizMapper.insert(quiz);
+
+        ArrayList<String> quizID = new ArrayList<>();
+        quizID.add(id);
+        List<Quiz> quiz2 = quizMapper.convertAllResultToObject();
+        for (Quiz q: quiz2) {
+            System.out.println(q.getID());
+        }
+
+        connection.close();
+
+        return quiz;
+    }
+
+
+
+    @RequestMapping(value = "/quiz/getQuestions/{id}", method = RequestMethod.GET)
+    public @ResponseBody
+    List<Question> getQuestions(@RequestHeader Map<String, String> headers,
+                        @PathVariable(value = "id") String id) throws SQLException {
+        Connection connection = ConnectionPool.getConnection();
+        QuizMapper quizMapper = new QuizMapper(false);
+        ArrayList<String> quizID = new ArrayList<>();
+        quizID.add(id);
+        Quiz quiz = quizMapper.find(quizID);
+        connection.close();
+
+        List<Question> questions = quiz.getQuestion(id);
+
         return questions;
     }
+
 
 
 
     @CrossOrigin(origins = {"http://194.62.43.26:8081", "http://localhost:8081"})
     @RequestMapping(value = "/quiz/answers", method = RequestMethod.POST)
     public @ResponseBody
-    void getUserAnswers(@RequestParam(value = "answers") String answers) throws IOException, InterruptedException, SQLException {
-        System.out.println("IN HEREEEEEEEE");
+    void getUserAnswers(@RequestParam(value = "answers") String answers,
+                        @RequestParam(value = "id") String id) throws IOException, InterruptedException, SQLException {
+        Connection connection = ConnectionPool.getConnection();
+        QuizMapper quizMapper = new QuizMapper(false);
+        ArrayList<String> quizID = new ArrayList<>();
+        quizID.add(id);
+        Quiz quiz = quizMapper.find(quizID);
+
         ArrayList<Integer> intAnswers = new ArrayList<>();
         for (int i = 0; i < answers.length(); i++) {
             intAnswers.add(Integer.parseInt(String.valueOf(answers.charAt(i))));
@@ -102,9 +137,10 @@ public class QuizRestAPI {
         quiz.setDate(sDate);
 
         System.out.println("AFTER SET ANSWERS");
-        Connection connection = ConnectionPool.getConnection();
-        QuizMapper quizMapper = new QuizMapper(false);
-        quizMapper.insert(quiz);
+
+        System.out.println("************************");
+        System.out.println(quizMapper.convertAllResultToObject().get(0).getAnswers().get(3));
+
         connection.close();
 
         List<Progress> progresses = createProgress(quiz);
@@ -115,7 +151,7 @@ public class QuizRestAPI {
     @CrossOrigin(origins = {"http://194.62.43.26:8081", "http://localhost:8081"})
     @RequestMapping(value = "/user/profile/subject/{courseID}/{subjectID}", method = RequestMethod.GET)
     public @ResponseBody
-    List<Question> produceQuizFromGivenTopic(
+    Quiz produceQuizFromGivenTopic(
             @RequestHeader Map<String, String> headers,
             @PathVariable(value = "courseID") String id,
             @PathVariable(value = "subjectID") String subjectID) throws SQLException {
@@ -143,7 +179,7 @@ public class QuizRestAPI {
                 return null;
             }
 
-            quiz = new Quiz();
+            Quiz quiz = new Quiz();
 
             quiz.setID(UUID.randomUUID().toString());
             Date date = new Date();
@@ -157,7 +193,12 @@ public class QuizRestAPI {
             quiz.setRightAnswers(quiz.getRightAnswers(questions));
             quiz.setQuestionIDs(quiz.getQuestionID(questions));
 
-            return questions;
+            Connection connection = ConnectionPool.getConnection();
+            QuizMapper quizMapper = new QuizMapper(false);
+            quizMapper.insert(quiz);
+            connection.close();
+
+            return quiz;
     }
 
 
@@ -165,19 +206,24 @@ public class QuizRestAPI {
     @CrossOrigin(origins = {"http://194.62.43.26:8081", "http://localhost:8081"})
     @RequestMapping(value = "user/profile/quiz/answers", method = RequestMethod.POST)
     public @ResponseBody
-    void getUserAnswersForQuizFromGivenTopic(@RequestParam(value = "answers") String answers) throws IOException, InterruptedException, SQLException {
+    void getUserAnswersForQuizFromGivenTopic(@RequestParam(value = "answers") String answers,
+                                             @RequestParam(value = "id") String id) throws IOException, InterruptedException, SQLException {
         ArrayList<Integer> intAnswers = new ArrayList<>();
         for (int i = 0; i < answers.length(); i++) {
             intAnswers.add(Integer.parseInt(String.valueOf(answers.charAt(i))));
         }
+
+        Connection connection = ConnectionPool.getConnection();
+        QuizMapper quizMapper = new QuizMapper(false);
+        ArrayList<String> quizID = new ArrayList<>();
+        quizID.add(id);
+        Quiz quiz = quizMapper.find(quizID);
+
         quiz.setAnswers(intAnswers);
         Date date = new Date();
         java.sql.Date sDate = new java.sql.Date(date.getTime());
         quiz.setDate(sDate);
 
-        Connection connection = ConnectionPool.getConnection();
-        QuizMapper quizMapper = new QuizMapper(false);
-        quizMapper.insert(quiz);
         connection.close();
 
         List<Progress> progresses = createProgress(quiz);
